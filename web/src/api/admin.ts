@@ -2,6 +2,7 @@ import { api } from './client'
 
 export interface AdminUser {
   id: string
+  username?: string
   email: string
   display_name: string
   global_role: string
@@ -54,8 +55,9 @@ export async function removeUserFromProject(userId: string, projectId: string) {
 // User creation and password management
 
 export interface CreateUserInput {
-  email: string
-  display_name: string
+  username?: string
+  email?: string
+  display_name?: string
 }
 
 export interface CreateUserResponse {

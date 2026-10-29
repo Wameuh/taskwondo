@@ -213,7 +213,7 @@
   "admin.users.displayName": "الاسم المعروض",
   "admin.users.email": "البريد الإلكتروني",
   "admin.users.emailAddress": "عنوان البريد الإلكتروني",
-  "admin.users.emailExists": "يوجد مستخدم بهذا البريد الإلكتروني بالفعل.",
+  "admin.users.emailExists": "يوجد مستخدم بهذا الاسم أو البريد الإلكتروني بالفعل.",
   "admin.users.filterActive": "المستخدمون النشطون",
   "admin.users.filterAll": "جميع المستخدمين",
   "admin.users.filterDisabled": "المستخدمون المعطلون",
@@ -467,7 +467,7 @@
   "login.discord.button": "تسجيل الدخول عبر Discord",
   "login.discord.callbackError": "فشلت المصادقة عبر Discord. حاول مرة أخرى.",
   "login.discord.error": "فشل بدء تسجيل الدخول عبر Discord. حاول مرة أخرى.",
-  "login.email": "البريد",
+  "login.email": "اسم المستخدم أو البريد الإلكتروني",
   "login.error": "فشل تسجيل الدخول. حاول مرة أخرى.",
   "login.forgotPassword": "هل نسيت كلمة المرور؟",
   "login.github.authenticating": "جارٍ المصادقة عبر GitHub...",
@@ -1529,5 +1529,6 @@
   "inlineComments.gutterTooltip_one": "{{count}} تعليق مضمّن",
   "inlineComments.gutterTooltip_other": "{{count}} تعليقات مضمّنة",
   "inlineComments.prevComment": "التعليق السابق",
-  "inlineComments.nextComment": "التعليق التالي"
+  "inlineComments.nextComment": "التعليق التالي",
+  "admin.users.usernameOrEmail": "اسم المستخدم أو البريد الإلكتروني"
 }

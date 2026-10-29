@@ -213,7 +213,7 @@
   "admin.users.displayName": "Anzeigename",
   "admin.users.email": "E-Mail",
   "admin.users.emailAddress": "E-Mail-Adresse",
-  "admin.users.emailExists": "Ein Benutzer mit dieser E-Mail-Adresse existiert bereits.",
+  "admin.users.emailExists": "Ein Benutzer mit diesem Benutzernamen oder dieser E-Mail existiert bereits.",
   "admin.users.filterActive": "Aktive Benutzer",
   "admin.users.filterAll": "Alle Benutzer",
   "admin.users.filterDisabled": "Deaktivierte Benutzer",
@@ -467,7 +467,7 @@
   "login.discord.button": "Mit Discord anmelden",
   "login.discord.callbackError": "Discord-Authentifizierung fehlgeschlagen. Bitte erneut versuchen.",
   "login.discord.error": "Discord-Anmeldung konnte nicht gestartet werden. Bitte erneut versuchen.",
-  "login.email": "E-Mail",
+  "login.email": "Benutzername oder E-Mail",
   "login.error": "Anmeldung fehlgeschlagen. Bitte erneut versuchen.",
   "login.forgotPassword": "Passwort vergessen?",
   "login.github.authenticating": "Authentifizierung mit GitHub...",
@@ -1529,5 +1529,6 @@
   "inlineComments.gutterTooltip_one": "{{count}} Inline-Kommentar",
   "inlineComments.gutterTooltip_other": "{{count}} Inline-Kommentare",
   "inlineComments.prevComment": "Vorheriger Kommentar",
-  "inlineComments.nextComment": "Nächster Kommentar"
+  "inlineComments.nextComment": "Nächster Kommentar",
+  "admin.users.usernameOrEmail": "Benutzername oder E-Mail"
 }

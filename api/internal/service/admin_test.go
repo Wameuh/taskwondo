@@ -79,6 +79,15 @@ func (m *mockAdminUserRepo) GetByEmail(_ context.Context, email string) (*model.
 	return u, nil
 }
 
+func (m *mockAdminUserRepo) GetByLogin(_ context.Context, identifier string) (*model.User, error) {
+	for _, u := range m.byEmail {
+		if u.Username == identifier || u.Email == identifier {
+			return u, nil
+		}
+	}
+	return nil, model.ErrNotFound
+}
+
 func (m *mockAdminUserRepo) Create(_ context.Context, user *model.User) error {
 	m.byID[user.ID] = user
 	m.byEmail[user.Email] = user

@@ -213,7 +213,7 @@
   "admin.users.displayName": "表示名",
   "admin.users.email": "メールアドレス",
   "admin.users.emailAddress": "メールアドレス",
-  "admin.users.emailExists": "このメールアドレスのユーザーは既に存在します。",
+  "admin.users.emailExists": "このユーザー名またはメールアドレスのユーザーは既に存在します。",
   "admin.users.filterActive": "有効なユーザー",
   "admin.users.filterAll": "すべてのユーザー",
   "admin.users.filterDisabled": "無効なユーザー",
@@ -467,7 +467,7 @@
   "login.discord.button": "Discordでログイン",
   "login.discord.callbackError": "Discord認証に失敗しました。再度お試しください。",
   "login.discord.error": "Discordログインの開始に失敗しました。再度お試しください。",
-  "login.email": "メール",
+  "login.email": "ユーザー名またはメール",
   "login.error": "ログインに失敗しました。再度お試しください。",
   "login.forgotPassword": "パスワードをお忘れですか？",
   "login.github.authenticating": "GitHubで認証中...",
@@ -1529,5 +1529,6 @@
   "inlineComments.gutterTooltip_one": "{{count}}件のインラインコメント",
   "inlineComments.gutterTooltip_other": "{{count}}件のインラインコメント",
   "inlineComments.prevComment": "前のコメント",
-  "inlineComments.nextComment": "次のコメント"
+  "inlineComments.nextComment": "次のコメント",
+  "admin.users.usernameOrEmail": "ユーザー名またはメール"
 }

@@ -148,7 +148,7 @@ export function DirectoryUsersTab() {
     const q = debouncedSearch.trim().toLowerCase()
     if (q) {
       result = result.filter((u) =>
-        u.display_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q),
+        u.display_name.toLowerCase().includes(q) || u.email.toLowerCase().includes(q) || (u.username ?? '').toLowerCase().includes(q),
       )
     }
     if (sortBy) {
@@ -165,7 +165,7 @@ export function DirectoryUsersTab() {
   const [error, setError] = useState<string | null>(null)
   const [disableTarget, setDisableTarget] = useState<AdminUser | null>(null)
   const [createModalOpen, setCreateModalOpen] = useState(false)
-  const [createEmail, setCreateEmail] = useState('')
+  const [createIdentifier, setCreateIdentifier] = useState('')
   const [createDisplayName, setCreateDisplayName] = useState('')
   const [createError, setCreateError] = useState<string | null>(null)
   const [revealedPassword, setRevealedPassword] = useState<string | null>(null)
@@ -311,11 +311,11 @@ export function DirectoryUsersTab() {
   function handleCreateUser() {
     setCreateError(null)
     createUserMutation.mutate(
-      { email: createEmail, display_name: createDisplayName },
+      { username: createIdentifier || undefined, display_name: createDisplayName || undefined },
       {
         onSuccess: (data) => {
           setCreateModalOpen(false)
-          setCreateEmail('')
+          setCreateIdentifier('')
           setCreateDisplayName('')
           setRevealedPassword(data.temporary_password)
           setRevealedUserName(data.user.display_name)
@@ -467,7 +467,7 @@ export function DirectoryUsersTab() {
                         {u.display_name}
                         {isSelf && <span className="ml-1 text-xs text-gray-400">({t('common.you')})</span>}
                       </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.email}</p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{u.username || u.email}</p>
                     </div>
                   </div>
                   <div className="flex items-center justify-center gap-1 min-w-0" onClick={(e) => e.stopPropagation()}>
@@ -598,7 +598,7 @@ export function DirectoryUsersTab() {
                       <p className="text-sm whitespace-nowrap">
                         <span className="font-medium text-gray-900 dark:text-gray-100">{u.display_name}</span>
                         {isSelf && <span className="ml-1 text-xs text-gray-400">({t('common.you')})</span>}
-                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{u.email}</span>
+                        <span className="ml-2 text-xs text-gray-500 dark:text-gray-400">{u.username || u.email}</span>
                       </p>
                     </div>
                   </div>
@@ -700,7 +700,7 @@ export function DirectoryUsersTab() {
       {/* Create user modal */}
       <Modal
         open={createModalOpen}
-        onClose={() => { setCreateModalOpen(false); setCreateEmail(''); setCreateDisplayName(''); setCreateError(null) }}
+        onClose={() => { setCreateModalOpen(false); setCreateIdentifier(''); setCreateDisplayName(''); setCreateError(null) }}
         title={t('admin.users.createUserTitle')}
       >
         <p className="text-sm text-gray-600 dark:text-gray-300 mb-4">
@@ -708,27 +708,27 @@ export function DirectoryUsersTab() {
         </p>
         <div className="space-y-3">
           <Input
-            label={t('admin.users.displayName')}
-            value={createDisplayName}
-            onChange={(e) => setCreateDisplayName(e.target.value)}
+            label={t('admin.users.usernameOrEmail')}
+            type="text"
+            value={createIdentifier}
+            onChange={(e) => setCreateIdentifier(e.target.value)}
             autoFocus
           />
           <Input
-            label={t('admin.users.emailAddress')}
-            type="email"
-            value={createEmail}
-            onChange={(e) => setCreateEmail(e.target.value)}
+            label={t('admin.users.displayName')}
+            value={createDisplayName}
+            onChange={(e) => setCreateDisplayName(e.target.value)}
           />
           {createError && (
             <p className="text-sm text-red-600 dark:text-red-400">{createError}</p>
           )}
         </div>
         <div className="flex justify-end gap-2 mt-4">
-          <Button variant="secondary" onClick={() => { setCreateModalOpen(false); setCreateEmail(''); setCreateDisplayName(''); setCreateError(null) }}>
+          <Button variant="secondary" onClick={() => { setCreateModalOpen(false); setCreateIdentifier(''); setCreateDisplayName(''); setCreateError(null) }}>
             {t('common.cancel')}
           </Button>
           <Button
-            disabled={!createEmail || !createDisplayName || createUserMutation.isPending}
+            disabled={!createIdentifier || createUserMutation.isPending}
             onClick={handleCreateUser}
           >
             {createUserMutation.isPending ? t('common.saving') : t('admin.users.createUserButton')}
