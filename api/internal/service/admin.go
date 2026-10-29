@@ -16,6 +16,7 @@ import (
 
 // AdminUserRepository defines user persistence operations needed by the admin service.
 type AdminUserRepository interface {
+	GetByLogin(ctx context.Context, identifier string) (*model.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
 	Create(ctx context.Context, user *model.User) error
@@ -228,26 +229,47 @@ func (s *AdminService) RemoveUserFromProject(ctx context.Context, userID, projec
 	return s.members.Remove(ctx, projectID, userID)
 }
 
+// usernameEmailDomain is the synthetic domain used to satisfy the NOT NULL +
+// UNIQUE email constraint for accounts created with only a username.
+const usernameEmailDomain = "@username.taskwondo.invalid"
+
 // CreateUser creates a new user with a temporary password.
+// identifier may be an email address or a plain username (letters, digits,
+// '-' and '_'); a username-only account gets a synthetic placeholder email.
+// displayName is optional and defaults to the identifier.
 // Returns the created user and the plaintext temporary password (shown once).
-func (s *AdminService) CreateUser(ctx context.Context, email, displayName string) (*model.User, string, error) {
-	email = strings.TrimSpace(email)
+func (s *AdminService) CreateUser(ctx context.Context, identifier, displayName string) (*model.User, string, error) {
+	identifier = strings.TrimSpace(identifier)
 	displayName = strings.TrimSpace(displayName)
 
-	if email == "" {
-		return nil, "", fmt.Errorf("%w: email is required", model.ErrValidation)
+	var email, username string
+	if strings.Contains(identifier, "@") {
+		email = identifier
+		username = usernameFromEmail(email)
+	} else {
+		var ok bool
+		username, ok = normalizeUsername(identifier)
+		if !ok {
+			return nil, "", fmt.Errorf("%w: invalid username (2-30 chars: a-z 0-9 - _)", model.ErrValidation)
+		}
+		email = username + usernameEmailDomain
 	}
 	if displayName == "" {
-		return nil, "", fmt.Errorf("%w: display name is required", model.ErrValidation)
+		displayName = username
 	}
 
-	// Check email uniqueness
-	_, err := s.users.GetByEmail(ctx, email)
+	// Username and email can never collide (usernames cannot contain '@'),
+	// so a single login-identifier lookup covers both uniqueness checks.
+	_, err := s.users.GetByLogin(ctx, identifier)
 	if err == nil {
 		return nil, "", model.ErrAlreadyExists
 	}
 	if !errors.Is(err, model.ErrNotFound) {
-		return nil, "", fmt.Errorf("checking email: %w", err)
+		return nil, "", fmt.Errorf("checking identifier: %w", err)
+	}
+	// For the email path, still guarantee a unique username.
+	if strings.Contains(identifier, "@") {
+		username = uniqueUsername(ctx, s.users, username)
 	}
 
 	password, err := generateTemporaryPassword()
@@ -262,6 +284,7 @@ func (s *AdminService) CreateUser(ctx context.Context, email, displayName string
 
 	user := &model.User{
 		ID:                  uuid.New(),
+		Username:            username,
 		Email:               email,
 		DisplayName:         displayName,
 		PasswordHash:        string(hash),

@@ -26,6 +26,7 @@ func NewAdminHandler(admin *service.AdminService) *AdminHandler {
 
 type adminUserResponse struct {
 	ID                  uuid.UUID  `json:"id"`
+	Username            string     `json:"username,omitempty"`
 	Email               string     `json:"email"`
 	DisplayName         string     `json:"display_name"`
 	GlobalRole          string     `json:"global_role"`
@@ -41,6 +42,7 @@ type adminUserResponse struct {
 func toAdminUserResponse(u *model.User) adminUserResponse {
 	return adminUserResponse{
 		ID:                  u.ID,
+		Username:            u.Username,
 		Email:               u.Email,
 		DisplayName:         u.DisplayName,
 		GlobalRole:          u.GlobalRole,
@@ -81,6 +83,7 @@ func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
 }
 
 type createUserRequest struct {
+	Username    string `json:"username"`
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 }
@@ -102,12 +105,16 @@ func (h *AdminHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if req.Email == "" || req.DisplayName == "" {
+	identifier := req.Username
+	if identifier == "" {
+		identifier = req.Email
+	}
+	if identifier == "" {
 		writeError(w, http.StatusBadRequest, CodeValidationError, "email and display_name are required")
 		return
 	}
 
-	user, password, err := h.admin.CreateUser(r.Context(), req.Email, req.DisplayName)
+	user, password, err := h.admin.CreateUser(r.Context(), identifier, req.DisplayName)
 	if err != nil {
 		if errors.Is(err, model.ErrAlreadyExists) {
 			writeError(w, http.StatusConflict, CodeConflict, "a user with this email already exists")

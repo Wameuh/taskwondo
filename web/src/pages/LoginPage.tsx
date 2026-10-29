@@ -141,11 +141,11 @@ export function LoginPage() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <Input
               label={t('login.email')}
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="email"
+              autoComplete="username"
             />
             <Input
               label={t('login.password')}

@@ -34,6 +34,7 @@ import (
 // UserRepository defines the persistence operations the auth service needs for users.
 type UserRepository interface {
 	GetByEmail(ctx context.Context, email string) (*model.User, error)
+	GetByLogin(ctx context.Context, identifier string) (*model.User, error)
 	GetByID(ctx context.Context, id uuid.UUID) (*model.User, error)
 	Create(ctx context.Context, user *model.User) error
 	UpdateLastLogin(ctx context.Context, id uuid.UUID) error
@@ -215,7 +216,7 @@ func (s *AuthService) getProvider(ctx context.Context, name string) OAuthProvide
 
 // Login verifies credentials and returns a JWT token and user.
 func (s *AuthService) Login(ctx context.Context, email, password string) (string, *model.User, error) {
-	user, err := s.users.GetByEmail(ctx, email)
+	user, err := s.users.GetByLogin(ctx, email)
 	if err != nil {
 		if errors.Is(err, model.ErrNotFound) {
 			return "", nil, model.ErrInvalidCredentials
@@ -573,6 +574,7 @@ func (s *AuthService) SeedAdminUser(ctx context.Context, email, password string)
 
 	user := &model.User{
 		ID:           uuid.New(),
+		Username:     usernameFromEmail(email),
 		Email:        email,
 		DisplayName:  "Admin",
 		PasswordHash: string(hash),
@@ -787,6 +789,7 @@ func (s *AuthService) VerifyEmailAndCreateUser(ctx context.Context, rawToken, pa
 
 	user := &model.User{
 		ID:           uuid.New(),
+		Username:     uniqueUsername(ctx, s.users, usernameFromEmail(verification.Email)),
 		Email:        verification.Email,
 		DisplayName:  verification.DisplayName,
 		PasswordHash: string(hash),
@@ -1072,6 +1075,7 @@ func (s *AuthService) findOrCreateOAuthUser(ctx context.Context, provider string
 
 		user = &model.User{
 			ID:          uuid.New(),
+			Username:    uniqueUsername(ctx, s.users, usernameFromEmail(email)),
 			Email:       email,
 			DisplayName: info.DisplayName,
 			GlobalRole:  model.RoleUser,

@@ -24,8 +24,18 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.User, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, email, display_name, password_hash, global_role, avatar_url,
-		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at
+		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at, username
 		 FROM users WHERE email = $1`, email)
+
+	return scanUser(row)
+}
+
+// GetByLogin returns a user by username or email address.
+func (r *UserRepository) GetByLogin(ctx context.Context, identifier string) (*model.User, error) {
+	row := r.db.QueryRowContext(ctx,
+		`SELECT id, email, display_name, password_hash, global_role, avatar_url,
+		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at, username
+		 FROM users WHERE username = $1 OR email = $1`, identifier)
 
 	return scanUser(row)
 }
@@ -34,7 +44,7 @@ func (r *UserRepository) GetByEmail(ctx context.Context, email string) (*model.U
 func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.User, error) {
 	row := r.db.QueryRowContext(ctx,
 		`SELECT id, email, display_name, password_hash, global_role, avatar_url,
-		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at
+		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at, username
 		 FROM users WHERE id = $1`, id)
 
 	return scanUser(row)
@@ -43,10 +53,11 @@ func (r *UserRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.User
 // Create inserts a new user.
 func (r *UserRepository) Create(ctx context.Context, user *model.User) error {
 	_, err := r.db.ExecContext(ctx,
-		`INSERT INTO users (id, email, display_name, password_hash, global_role, avatar_url, is_active, force_password_change)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+		`INSERT INTO users (id, email, display_name, password_hash, global_role, avatar_url, is_active, force_password_change, username)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
 		user.ID, user.Email, user.DisplayName, sql.NullString{String: user.PasswordHash, Valid: user.PasswordHash != ""},
-		user.GlobalRole, user.AvatarURL, user.IsActive, user.ForcePasswordChange)
+		user.GlobalRole, user.AvatarURL, user.IsActive, user.ForcePasswordChange,
+		sql.NullString{String: user.Username, Valid: user.Username != ""})
 	if err != nil {
 		return fmt.Errorf("inserting user: %w", err)
 	}
@@ -101,7 +112,7 @@ func (r *UserRepository) Search(ctx context.Context, callerID uuid.UUID, query s
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT u.id, u.email, u.display_name, u.password_hash, u.global_role, u.avatar_url,
 		        u.is_active, u.force_password_change, u.max_projects, u.max_namespaces,
-		        u.last_login_at, u.created_at, u.updated_at,
+		        u.last_login_at, u.created_at, u.updated_at, u.username,
 		        COALESCE(array_agg(DISTINCT ns.slug) FILTER (WHERE ns.slug IS NOT NULL), '{}') AS namespace_slugs
 		 FROM users u
 		 JOIN project_members pm1 ON pm1.user_id = u.id
@@ -111,7 +122,7 @@ func (r *UserRepository) Search(ctx context.Context, callerID uuid.UUID, query s
 		 WHERE pm2.user_id = $1
 		   AND u.id != $1
 		   AND u.is_active = true
-		   AND ($2 = '%%' OR u.email ILIKE $2 OR u.display_name ILIKE $2)
+		   AND ($2 = '%%' OR u.email ILIKE $2 OR u.username ILIKE $2 OR u.display_name ILIKE $2)
 		 GROUP BY u.id
 		 ORDER BY u.display_name ASC
 		 LIMIT 20`, callerID, q)
@@ -129,13 +140,15 @@ func (r *UserRepository) Search(ctx context.Context, callerID uuid.UUID, query s
 		var maxNamespaces sql.NullInt32
 		var lastLoginAt sql.NullTime
 		var namespaceSlugs pq.StringArray
+		var username sql.NullString
 		if err := rows.Scan(
 			&u.ID, &u.Email, &u.DisplayName, &passwordHash, &u.GlobalRole,
 			&avatarURL, &u.IsActive, &u.ForcePasswordChange, &maxProjects, &maxNamespaces, &lastLoginAt, &u.CreatedAt, &u.UpdatedAt,
-			&namespaceSlugs,
+			&username, &namespaceSlugs,
 		); err != nil {
 			return nil, fmt.Errorf("scanning user row: %w", err)
 		}
+		u.Username = username.String
 		if avatarURL.Valid {
 			u.AvatarURL = &avatarURL.String
 		}
@@ -160,7 +173,7 @@ func (r *UserRepository) Search(ctx context.Context, callerID uuid.UUID, query s
 func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
 	rows, err := r.db.QueryContext(ctx,
 		`SELECT id, email, display_name, password_hash, global_role, avatar_url,
-		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at
+		        is_active, force_password_change, max_projects, max_namespaces, last_login_at, created_at, updated_at, username
 		 FROM users
 		 ORDER BY display_name ASC`)
 	if err != nil {
@@ -176,12 +189,15 @@ func (r *UserRepository) ListAll(ctx context.Context) ([]model.User, error) {
 		var maxProjects sql.NullInt32
 		var maxNamespaces sql.NullInt32
 		var lastLoginAt sql.NullTime
+		var username sql.NullString
 		if err := rows.Scan(
 			&u.ID, &u.Email, &u.DisplayName, &passwordHash, &u.GlobalRole,
 			&avatarURL, &u.IsActive, &u.ForcePasswordChange, &maxProjects, &maxNamespaces, &lastLoginAt, &u.CreatedAt, &u.UpdatedAt,
+			&username,
 		); err != nil {
 			return nil, fmt.Errorf("scanning user row: %w", err)
 		}
+		u.Username = username.String
 		if avatarURL.Valid {
 			u.AvatarURL = &avatarURL.String
 		}
@@ -318,9 +334,12 @@ func scanUser(row *sql.Row) (*model.User, error) {
 	var maxNamespaces sql.NullInt32
 	var lastLoginAt sql.NullTime
 
+	var username sql.NullString
+
 	err := row.Scan(
 		&u.ID, &u.Email, &u.DisplayName, &passwordHash, &u.GlobalRole,
 		&avatarURL, &u.IsActive, &u.ForcePasswordChange, &maxProjects, &maxNamespaces, &lastLoginAt, &u.CreatedAt, &u.UpdatedAt,
+		&username,
 	)
 	if err == sql.ErrNoRows {
 		return nil, model.ErrNotFound
@@ -329,6 +348,7 @@ func scanUser(row *sql.Row) (*model.User, error) {
 		return nil, fmt.Errorf("scanning user: %w", err)
 	}
 
+	u.Username = username.String
 	u.PasswordHash = passwordHash.String
 	if avatarURL.Valid {
 		u.AvatarURL = &avatarURL.String

@@ -15,6 +15,7 @@ const (
 // User represents an internal user of the system.
 type User struct {
 	ID           uuid.UUID  `json:"id"`
+	Username     string     `json:"username,omitempty"`
 	Email        string     `json:"email"`
 	DisplayName  string     `json:"display_name"`
 	PasswordHash string     `json:"-"`

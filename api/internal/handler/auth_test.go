@@ -39,6 +39,15 @@ func (m *mockUserRepo) GetByEmail(_ context.Context, email string) (*model.User,
 	return u, nil
 }
 
+func (m *mockUserRepo) GetByLogin(_ context.Context, identifier string) (*model.User, error) {
+	for _, u := range m.users {
+		if u.Username == identifier || u.Email == identifier {
+			return u, nil
+		}
+	}
+	return nil, model.ErrNotFound
+}
+
 func (m *mockUserRepo) GetByID(_ context.Context, id uuid.UUID) (*model.User, error) {
 	u, ok := m.byID[id]
 	if !ok {
