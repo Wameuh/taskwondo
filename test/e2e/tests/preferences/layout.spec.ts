@@ -81,6 +81,14 @@ test.describe('Layout Preferences', () => {
     const projectClassCentered = await projectContainer.getAttribute('class');
     expect(projectClassCentered).toContain('max-w-7xl');
     await attach(page, testInfo, '06-items-centered');
+
+    // Board view always uses the full width, even in centered layout
+    await page.goto(`/d/projects/${testProject.key}/items?view=board`);
+    await page.waitForLoadState('networkidle');
+    const boardContainer = page.locator('main > div').first();
+    const boardClass = await boardContainer.getAttribute('class');
+    expect(boardClass).not.toContain('max-w-7xl');
+    await attach(page, testInfo, '07-board-fullwidth');
   });
 
   test('layout persists across page navigation', async ({ page, testProject }, testInfo) => {

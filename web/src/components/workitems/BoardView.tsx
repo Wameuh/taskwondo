@@ -9,8 +9,6 @@ import { Tooltip } from '@/components/ui/Tooltip'
 import type { WorkItem } from '@/api/workitems'
 import type { WorkflowStatus, WorkflowTransition } from '@/api/workflows'
 
-const COLUMN_WIDTH = 304 // 288px (w-72) + 16px gap (gap-4 = 1rem)
-
 interface DraggedItem {
   itemNumber: number
   fromStatus: string
@@ -120,15 +118,19 @@ export function BoardView({ projectKey, items, statuses, transitionsMap, onItemC
   const scrollBy = useCallback((direction: 'left' | 'right') => {
     const el = scrollContainerRef.current
     if (!el) return
+    const columns = Array.from(el.children) as HTMLElement[]
+    if (columns.length === 0) return
+    const base = el.offsetLeft
     const currentScroll = el.scrollLeft
     if (direction === 'right') {
       // Snap to the start of the next hidden column
-      const nextColumnStart = (Math.floor(currentScroll / COLUMN_WIDTH) + 1) * COLUMN_WIDTH
-      el.scrollTo({ left: nextColumnStart, behavior: 'smooth' })
+      const next = columns.find((col) => col.offsetLeft - base > currentScroll + 1)
+      el.scrollTo({ left: next ? next.offsetLeft - base : el.scrollWidth, behavior: 'smooth' })
     } else {
       // Snap to the start of the previous column
-      const prevColumnStart = (Math.ceil(currentScroll / COLUMN_WIDTH) - 1) * COLUMN_WIDTH
-      el.scrollTo({ left: Math.max(0, prevColumnStart), behavior: 'smooth' })
+      const firstVisible = columns.findIndex((col) => col.offsetLeft - base + col.offsetWidth > currentScroll + 1)
+      const idx = firstVisible === -1 ? columns.length - 1 : Math.max(0, firstVisible - 1)
+      el.scrollTo({ left: columns[idx].offsetLeft - base, behavior: 'smooth' })
     }
   }, [])
 
@@ -173,7 +175,7 @@ export function BoardView({ projectKey, items, statuses, transitionsMap, onItemC
           return (
             <div
               key={status.name}
-              className={`min-w-[280px] w-72 shrink-0 p-2 transition-colors ${columnClasses}`}
+              className={`min-w-[240px] flex-1 p-2 transition-colors ${columnClasses}`}
               onDragOver={(e) => handleColumnDragOver(e, status.name)}
               onDragEnter={(e) => handleColumnDragEnter(e, status.name)}
               onDragLeave={(e) => handleColumnDragLeave(e, status.name)}

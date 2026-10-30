@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef } from 'react'
-import { useNavigate, useParams, Link } from 'react-router-dom'
+import { useNavigate, useParams, Link, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useWorkItems, useBulkUpdateWorkItems, type BulkUpdateResult } from '@/hooks/useWorkItems'
 import { useQueue } from '@/hooks/useQueues'
@@ -65,10 +65,12 @@ export function QueueWorkItemsPage() {
   const { data: strikethroughPref } = usePreference<boolean>('strikethrough_completed')
   const strikethroughEnabled = strikethroughPref ?? true
 
+  const [searchParams, setSearchParams] = useSearchParams()
+
   // Filters & view state
   const [filter, setFilter] = useState<WorkItemFilter>({})
   const [search, setSearch] = useState('')
-  const [viewMode, setViewMode] = useState<ViewMode>('list')
+  const [viewMode, setViewMode] = useState<ViewMode>(searchParams.get('view') === 'board' ? 'board' : 'list')
   const [sort, setSort] = useState('created_at')
   const [order, setOrder] = useState<'asc' | 'desc'>('desc')
 
@@ -176,6 +178,11 @@ export function QueueWorkItemsPage() {
 
   function handleSearchChange(q: string) {
     setSearch(q)
+  }
+
+  function handleViewChange(v: ViewMode) {
+    setViewMode(v)
+    setSearchParams(v === 'board' ? { view: 'board' } : {}, { replace: true })
   }
 
   function handleSort(sortKey: string) {
@@ -334,7 +341,7 @@ export function QueueWorkItemsPage() {
             className={`flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-l-md border ${
               viewMode === 'list' ? 'bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'
             }`}
-            onClick={() => setViewMode('list')}
+            onClick={() => handleViewChange('list')}
           >
             <LayoutList className="h-4 w-4" />
             {t('workitems.view.list')}
@@ -343,7 +350,7 @@ export function QueueWorkItemsPage() {
             className={`flex items-center justify-center gap-1.5 px-3 py-2 text-sm font-medium rounded-r-md border-t border-r border-b ${
               viewMode === 'board' ? 'bg-indigo-50 text-indigo-700 border-indigo-300 dark:bg-indigo-900/30 dark:text-indigo-300 dark:border-indigo-700' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-600 dark:hover:bg-gray-700'
             }`}
-            onClick={() => setViewMode('board')}
+            onClick={() => handleViewChange('board')}
           >
             <LayoutGrid className="h-4 w-4" />
             {t('workitems.view.board')}
