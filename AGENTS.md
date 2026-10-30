@@ -145,3 +145,39 @@ Key infrastructure:
 - **Fully containerized**: `make test-e2e` runs the entire stack in Docker (Postgres, MinIO, Mailpit, API, Web, Playwright)
 
 **Use `make test-e2e` for the full suite.** There the frontend is served by the API, so root-level routes like `/metrics` resolve. `make test-e2e-dev` targets Vite (`:5173`), which only proxies `/api` — admin/metrics specs get the SPA shell and fail. Use the dev server for targeted specs only, passing `BASE_URL=http://localhost:5173` (`playwright.config.ts` loads dotenv from `test/.env`, which does not exist, and `.env` points `BASE_URL` at `:3000`). `/auth/login` is rate-limited to 10 req/min per IP and each `testUser` spends 3, so more than ~3 dev-server tests in a minute hit 429s.
+
+---
+
+## Wameuh fork — ops (deployment to taskwondo.wameuh.cloud is automated)
+
+This fork deploys to `https://taskwondo.wameuh.cloud` on a self-hosted VPS via Coolify.
+Merging to `main` is enough to ship: `.github/workflows/build-images.yml` builds
+`api`, `worker` and `web` images and pushes them to `ghcr.io/wameuh/taskwondo-*:latest`;
+the VPS polls the registry every 5 min, retags them to `taskwondo-fork/*:latest`
+and redeploys the service (DB migrations run at API startup — nothing is reset).
+
+### Constraints
+
+- **DB migrations must be additive/backward-compatible** — production data is
+  preserved across deploys; never write destructive migrations.
+- **Never touch `coolify-*` / `wg-easy-*` containers** on the VPS.
+- API compatibility: keep old request fields working (see "API Compatibility"
+  above). `username` was added by fork migration 000063 — every user has one;
+  `email` may be a synthetic `*@username.taskwondo.invalid` placeholder.
+- Conventional commits (`feat:`, `fix:`, `docs:`…).
+
+### Local verification (no Docker available in the dev container)
+
+```bash
+mise install                 # pinned go/node toolchain
+cd api && go build ./... && go vet ./...
+cd web && npm ci && npm run typecheck
+```
+
+Docker image builds and E2E run in CI / on the host, not in the container.
+
+### Manual deploy (host side)
+
+`~/bin/taskwondo-redeploy.sh` builds `taskwondo-fork/*:latest` images locally on
+the VPS and triggers a Coolify redeploy; `~/bin/taskwondo-autodeploy.sh` is the
+5-min cron that converges `:latest` to the registry state.
