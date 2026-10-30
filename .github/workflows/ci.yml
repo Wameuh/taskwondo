@@ -74,7 +74,8 @@ jobs:
   publish:
     name: Publish Docker images
     needs: [test-api, test-web, test-e2e]
-    if: github.event_name == 'push'
+    # Only the upstream repo may push to ghcr.io/marcoshack — forks build via build-images.yml.
+    if: github.event_name == 'push' && github.repository == 'marcoshack/taskwondo'
     runs-on: ubuntu-latest
     permissions:
       packages: write
