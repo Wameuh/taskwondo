@@ -8,6 +8,8 @@ on:
 jobs:
   cleanup:
     name: Delete untagged images
+    # Only meaningful on the upstream repo, whose packages the token can manage.
+    if: github.repository == 'marcoshack/taskwondo'
     runs-on: ubuntu-latest
     permissions:
       packages: write
