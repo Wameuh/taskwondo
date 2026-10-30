@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react'
 import type { ReactNode } from 'react'
+import { useLocation, useMatch } from 'react-router-dom'
 import { usePreference, useSetPreference } from '@/hooks/usePreferences'
 import { useAuth } from '@/contexts/AuthContext'
 
@@ -27,9 +28,16 @@ function getStoredLayout(): Layout {
 export function LayoutProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [layout, setLayoutState] = useState<Layout>(getStoredLayout)
+  const location = useLocation()
 
   const { data: apiLayout } = usePreference<string>(user ? 'layout' : '')
   const setPreferenceMutation = useSetPreference()
+
+  const itemsRouteMatch = useMatch('/:namespace/projects/:projectKey/items')
+  const queueItemsRouteMatch = useMatch('/:namespace/projects/:projectKey/queues/:queueId/items')
+  const boardViewActive =
+    (itemsRouteMatch || queueItemsRouteMatch) != null &&
+    new URLSearchParams(location.search).get('view') === 'board'
 
   // Sync API layout to local state on load
   useEffect(() => {
@@ -52,12 +60,12 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
 
   const containerClass = useCallback(
     (expandable = false) => {
-      if (expandable && layout === 'expanded') {
+      if (boardViewActive || (expandable && layout === 'expanded')) {
         return 'px-4 sm:px-6 lg:px-8'
       }
       return 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
     },
-    [layout],
+    [layout, boardViewActive],
   )
 
   return (
