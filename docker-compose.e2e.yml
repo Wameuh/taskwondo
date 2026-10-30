@@ -25,22 +25,17 @@ services:
     restart: "no"
 
   minio-init:
+    # Chainguard images are distroless (no shell): the entrypoint is mc itself
+    # and MC_HOST_<alias> carries the credentials. on-failure retries cover the
+    # server startup window.
     image: cgr.dev/chainguard/minio-client:latest
     depends_on:
       minio:
         condition: service_started
-    # The Chainguard server image has no mc — readiness is polled here instead
-    # of a healthcheck on the minio service.
-    entrypoint: >
-      /bin/sh -c "
-      mc alias set local http://minio:9000 e2eminioaccess e2eminiosecret;
-      for i in $$(seq 1 30); do
-        mc ready local && break;
-        sleep 1;
-      done;
-      mc mb --ignore-existing local/taskwondo-attachments;
-      "
-    restart: "no"
+    command: ["mb", "--ignore-existing", "local/taskwondo-attachments"]
+    environment:
+      MC_HOST_local: http://e2eminioaccess:e2eminiosecret@minio:9000
+    restart: "on-failure:20"
 
   mailpit:
     image: axllent/mailpit:latest
