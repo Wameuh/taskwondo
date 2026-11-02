@@ -94,6 +94,7 @@ type CreateWorkflowInput struct {
 	ProjectID   *uuid.UUID
 	Name        string
 	Description *string
+	Mode        string
 	Statuses    []model.WorkflowStatus
 	Transitions []model.WorkflowTransition
 }
@@ -102,6 +103,13 @@ type CreateWorkflowInput struct {
 func (s *WorkflowService) Create(ctx context.Context, input CreateWorkflowInput) (*model.Workflow, error) {
 	if input.Name == "" {
 		return nil, fmt.Errorf("name is required: %w", model.ErrValidation)
+	}
+	mode := input.Mode
+	if mode == "" {
+		mode = model.WorkflowModeOrdered
+	}
+	if !isValidWorkflowMode(mode) {
+		return nil, fmt.Errorf("invalid workflow mode %q: %w", mode, model.ErrValidation)
 	}
 	if len(input.Statuses) == 0 {
 		return nil, fmt.Errorf("at least one status is required: %w", model.ErrValidation)
@@ -152,14 +160,21 @@ func (s *WorkflowService) Create(ctx context.Context, input CreateWorkflowInput)
 		seenTransitions[key] = true
 	}
 
+	transitions := input.Transitions
+	if mode == model.WorkflowModeFree {
+		// Transition rules are meaningless in free mode — don't store them.
+		transitions = nil
+	}
+
 	wf := &model.Workflow{
 		ID:          uuid.New(),
 		ProjectID:   input.ProjectID,
 		Name:        input.Name,
 		Description: input.Description,
 		IsDefault:   false,
+		Mode:        mode,
 		Statuses:    input.Statuses,
-		Transitions: input.Transitions,
+		Transitions: transitions,
 	}
 
 	if err := s.workflows.Create(ctx, wf); err != nil {
@@ -178,6 +193,7 @@ func (s *WorkflowService) Create(ctx context.Context, input CreateWorkflowInput)
 type UpdateWorkflowInput struct {
 	Name        *string
 	Description *string
+	Mode        *string
 	Statuses    []model.WorkflowStatus
 	Transitions []model.WorkflowTransition
 }
@@ -203,6 +219,12 @@ func (s *WorkflowService) Update(ctx context.Context, id uuid.UUID, input Update
 	}
 	if input.Description != nil {
 		wf.Description = input.Description
+	}
+	if input.Mode != nil {
+		if !isValidWorkflowMode(*input.Mode) {
+			return nil, fmt.Errorf("invalid workflow mode %q: %w", *input.Mode, model.ErrValidation)
+		}
+		wf.Mode = *input.Mode
 	}
 
 	// If statuses and transitions are provided, do a full replace
@@ -236,6 +258,9 @@ func (s *WorkflowService) Update(ctx context.Context, id uuid.UUID, input Update
 
 		wf.Statuses = input.Statuses
 		wf.Transitions = input.Transitions
+		if wf.Mode == model.WorkflowModeFree {
+			wf.Transitions = nil
+		}
 
 		if err := s.workflows.ReplaceStatusesAndTransitions(ctx, wf); err != nil {
 			return nil, fmt.Errorf("replacing workflow statuses and transitions: %w", err)
@@ -320,13 +345,16 @@ func (s *WorkflowService) GetDefaultTaskWorkflowID(ctx context.Context) (uuid.UU
 	return wf.ID, nil
 }
 
-// SeedDefaultWorkflows creates the Task and Ticket workflows if they don't exist.
+// SeedDefaultWorkflows creates the Task, Ticket and Free workflows if they don't exist.
 func (s *WorkflowService) SeedDefaultWorkflows(ctx context.Context) error {
 	if err := s.seedTaskWorkflow(ctx); err != nil {
 		return fmt.Errorf("seeding task workflow: %w", err)
 	}
 	if err := s.seedTicketWorkflow(ctx); err != nil {
 		return fmt.Errorf("seeding ticket workflow: %w", err)
+	}
+	if err := s.seedFreeWorkflow(ctx); err != nil {
+		return fmt.Errorf("seeding free workflow: %w", err)
 	}
 	return nil
 }
@@ -361,6 +389,7 @@ func (s *WorkflowService) seedTaskWorkflow(ctx context.Context) error {
 		Name:        "Task Workflow",
 		Description: &desc,
 		IsDefault:   true,
+		Mode:        model.WorkflowModeOrdered,
 		Statuses: []model.WorkflowStatus{
 			{Name: "backlog", DisplayName: "Backlog", Category: model.CategoryTodo, Position: 0},
 			{Name: "open", DisplayName: "Open", Category: model.CategoryTodo, Position: 1},
@@ -409,6 +438,7 @@ func (s *WorkflowService) seedTicketWorkflow(ctx context.Context) error {
 		Name:        "Ticket Workflow",
 		Description: &desc,
 		IsDefault:   true,
+		Mode:        model.WorkflowModeOrdered,
 		Statuses: []model.WorkflowStatus{
 			{Name: "new", DisplayName: "New", Category: model.CategoryTodo, Position: 0},
 			{Name: "triaged", DisplayName: "Triaged", Category: model.CategoryTodo, Position: 1},
@@ -441,6 +471,45 @@ func (s *WorkflowService) seedTicketWorkflow(ctx context.Context) error {
 
 	log.Ctx(ctx).Info().Str("workflow_id", wf.ID.String()).Msg("seeded ticket workflow")
 	return nil
+}
+
+func (s *WorkflowService) seedFreeWorkflow(ctx context.Context) error {
+	_, err := s.workflows.GetDefaultByName(ctx, "Free Workflow")
+	if err == nil {
+		log.Ctx(ctx).Debug().Msg("free workflow already exists, skipping seed")
+		return nil
+	}
+	if err != model.ErrNotFound {
+		return err
+	}
+
+	desc := "Statuses are defined but any member can move items freely between them"
+	wf := &model.Workflow{
+		ID:          uuid.New(),
+		Name:        "Free Workflow",
+		Description: &desc,
+		IsDefault:   true,
+		Mode:        model.WorkflowModeFree,
+		Statuses: []model.WorkflowStatus{
+			{Name: "backlog", DisplayName: "Backlog", Category: model.CategoryTodo, Position: 0},
+			{Name: "open", DisplayName: "Open", Category: model.CategoryTodo, Position: 1},
+			{Name: "in_progress", DisplayName: "In Progress", Category: model.CategoryInProgress, Position: 2},
+			{Name: "in_review", DisplayName: "In Review", Category: model.CategoryInProgress, Position: 3},
+			{Name: "done", DisplayName: "Done", Category: model.CategoryDone, Position: 4},
+			{Name: "cancelled", DisplayName: "Cancelled", Category: model.CategoryCancelled, Position: 5},
+		},
+	}
+
+	if err := s.workflows.Create(ctx, wf); err != nil {
+		return err
+	}
+
+	log.Ctx(ctx).Info().Str("workflow_id", wf.ID.String()).Msg("seeded free workflow")
+	return nil
+}
+
+func isValidWorkflowMode(m string) bool {
+	return m == model.WorkflowModeOrdered || m == model.WorkflowModeFree
 }
 
 func isValidCategory(c string) bool {

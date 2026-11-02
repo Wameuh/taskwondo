@@ -32,7 +32,7 @@ import { Lock, Plus, Pencil, Trash2, ArrowRight, Check, Eye, Clock, ChevronDown,
 import { Tooltip } from '@/components/ui/Tooltip'
 import { SLAConfigModal } from '@/components/SLAConfigModal'
 import { EscalationListModal } from '@/components/EscalationListModal'
-import type { WorkflowStatus } from '@/api/workflows'
+import type { WorkflowStatus, WorkflowMode } from '@/api/workflows'
 import { getLocalizedError } from '@/utils/apiError'
 
 const CATEGORY_COLORS: Record<string, 'blue' | 'indigo' | 'green' | 'gray'> = {
@@ -916,7 +916,9 @@ function WorkflowDetailModal({
 
           <div>
             <h4 className="text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">{t('workflows.transitions')}</h4>
-            {workflow.transitions.length === 0 ? (
+            {workflow.mode === 'free' ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400">{t('workflows.freeModeDesc')}</p>
+            ) : workflow.transitions.length === 0 ? (
               <p className="text-sm text-gray-500 dark:text-gray-400">{t('workflows.noTransitions')}</p>
             ) : (
               <div className="space-y-1">
@@ -987,6 +989,7 @@ function WorkflowEditorModal({
   const [description, setDescription] = useState('')
   const [statuses, setStatuses] = useState<StatusDraft[]>([])
   const [transitions, setTransitions] = useState<TransitionDraft[]>([])
+  const [mode, setMode] = useState<WorkflowMode>('ordered')
   const [initialized, setInitialized] = useState(false)
   const [validationError, setValidationError] = useState('')
 
@@ -994,6 +997,7 @@ function WorkflowEditorModal({
   if (isEdit && existingWorkflow && !initialized) {
     setName(existingWorkflow.name)
     setDescription(existingWorkflow.description ?? '')
+    setMode(existingWorkflow.mode)
     setStatuses(
       existingWorkflow.statuses.map((s) => ({
         name: s.name,
@@ -1099,7 +1103,8 @@ function WorkflowEditorModal({
         position: s.position,
         color: null,
       })),
-      transitions: transitions.map((tr) => ({
+      mode,
+      transitions: mode === 'free' ? [] : transitions.map((tr) => ({
         from_status: tr.from_status,
         to_status: tr.to_status,
         name: tr.name.trim() || null,
@@ -1168,6 +1173,21 @@ function WorkflowEditorModal({
           />
         </div>
 
+        {/* Transition mode */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            {t('workflows.transitionMode')}
+          </label>
+          <select
+            className="block w-full rounded-md border border-gray-300 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
+            value={mode}
+            onChange={(e) => setMode(e.target.value as WorkflowMode)}
+          >
+            <option value="ordered">{t('workflows.modeOrdered')}</option>
+            <option value="free">{t('workflows.modeFree')}</option>
+          </select>
+        </div>
+
         {/* Status Selection */}
         <div>
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -1211,6 +1231,9 @@ function WorkflowEditorModal({
         </div>
 
         {/* Transitions */}
+        {mode === 'free' ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">{t('workflows.freeModeDesc')}</p>
+        ) : (
         <div>
           <div className="flex items-center justify-between mb-2">
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
@@ -1271,6 +1294,7 @@ function WorkflowEditorModal({
             </div>
           )}
         </div>
+        )}
 
         {/* Actions */}
         <div className="flex justify-end gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">

@@ -14,6 +14,14 @@ const (
 	CategoryCancelled  = "cancelled"
 )
 
+// Workflow mode constants.
+const (
+	// WorkflowModeOrdered enforces the declared transition rules.
+	WorkflowModeOrdered = "ordered"
+	// WorkflowModeFree allows any change between the workflow's defined statuses.
+	WorkflowModeFree = "free"
+)
+
 // Workflow defines a set of statuses and transitions for work items.
 type Workflow struct {
 	ID          uuid.UUID            `json:"id"`
@@ -21,6 +29,7 @@ type Workflow struct {
 	Name        string               `json:"name"`
 	Description *string              `json:"description,omitempty"`
 	IsDefault   bool                 `json:"is_default"`
+	Mode        string               `json:"mode"`
 	Statuses    []WorkflowStatus     `json:"statuses,omitempty"`
 	Transitions []WorkflowTransition `json:"transitions,omitempty"`
 	CreatedAt   time.Time            `json:"created_at"`

@@ -70,14 +70,26 @@ export function useProjectWorkflow(projectKey: string, workItemType?: string, na
 
   // Build transitions map from workflow detail
   const transitionsMap = useMemo(() => {
-    if (!workflowQuery.data?.transitions) return undefined
+    const wf = workflowQuery.data
+    if (!wf) return undefined
+    // Free workflows allow any status change between defined statuses
+    if (wf.mode === 'free') {
+      const map: Record<string, WorkflowTransition[]> = {}
+      for (const from of wf.statuses) {
+        map[from.name] = wf.statuses
+          .filter((to) => to.name !== from.name)
+          .map((to) => ({ id: `free-${from.name}-${to.name}`, from_status: from.name, to_status: to.name, name: null }))
+      }
+      return map
+    }
+    if (!wf.transitions) return undefined
     const map: Record<string, WorkflowTransition[]> = {}
-    for (const t of workflowQuery.data.transitions) {
+    for (const t of wf.transitions) {
       if (!map[t.from_status]) map[t.from_status] = []
       map[t.from_status].push(t)
     }
     return map
-  }, [workflowQuery.data?.transitions])
+  }, [workflowQuery.data])
 
   return {
     workflowId,

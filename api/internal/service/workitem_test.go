@@ -114,6 +114,13 @@ func (m *mockWorkflowRepo) ValidateTransition(_ context.Context, workflowID uuid
 			return true, nil
 		}
 	}
+	if wf.Mode == model.WorkflowModeFree {
+		for _, s := range wf.Statuses {
+			if s.Name == toStatus {
+				return true, nil
+			}
+		}
+	}
 	return false, nil
 }
 

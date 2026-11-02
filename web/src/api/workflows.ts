@@ -18,12 +18,15 @@ export interface WorkflowTransition {
   name: string | null
 }
 
+export type WorkflowMode = 'ordered' | 'free'
+
 export interface Workflow {
   id: string
   project_id?: string | null
   name: string
   description: string | null
   is_default: boolean
+  mode: WorkflowMode
   statuses: WorkflowStatus[]
   created_at: string
   updated_at: string
@@ -36,6 +39,7 @@ export interface WorkflowDetail extends Workflow {
 export interface CreateWorkflowInput {
   name: string
   description?: string | null
+  mode?: WorkflowMode
   statuses: Omit<WorkflowStatus, 'id'>[]
   transitions: Omit<WorkflowTransition, 'id'>[]
 }
@@ -43,6 +47,7 @@ export interface CreateWorkflowInput {
 export interface UpdateWorkflowInput {
   name?: string
   description?: string | null
+  mode?: WorkflowMode
   statuses?: Omit<WorkflowStatus, 'id'>[]
   transitions?: Omit<WorkflowTransition, 'id'>[]
 }

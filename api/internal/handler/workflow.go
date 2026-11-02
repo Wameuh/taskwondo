@@ -30,6 +30,7 @@ func NewWorkflowHandler(workflows *service.WorkflowService, projects *service.Pr
 type createWorkflowRequest struct {
 	Name        string                    `json:"name"`
 	Description *string                   `json:"description,omitempty"`
+	Mode        string                    `json:"mode,omitempty"`
 	Statuses    []createWorkflowStatusDTO `json:"statuses"`
 	Transitions []createWorkflowTransDTO  `json:"transitions"`
 }
@@ -51,6 +52,7 @@ type createWorkflowTransDTO struct {
 type updateWorkflowRequest struct {
 	Name        *string                   `json:"name,omitempty"`
 	Description *string                   `json:"description,omitempty"`
+	Mode        *string                   `json:"mode,omitempty"`
 	Statuses    []createWorkflowStatusDTO `json:"statuses,omitempty"`
 	Transitions []createWorkflowTransDTO  `json:"transitions,omitempty"`
 }
@@ -63,6 +65,7 @@ type workflowResponse struct {
 	Name        string                   `json:"name"`
 	Description *string                  `json:"description,omitempty"`
 	IsDefault   bool                     `json:"is_default"`
+	Mode        string                   `json:"mode"`
 	Statuses    []workflowStatusResponse `json:"statuses"`
 	CreatedAt   time.Time                `json:"created_at"`
 	UpdatedAt   time.Time                `json:"updated_at"`
@@ -74,6 +77,7 @@ type workflowDetailResponse struct {
 	Name        string                       `json:"name"`
 	Description *string                      `json:"description,omitempty"`
 	IsDefault   bool                         `json:"is_default"`
+	Mode        string                       `json:"mode"`
 	Statuses    []workflowStatusResponse     `json:"statuses"`
 	Transitions []workflowTransitionResponse `json:"transitions"`
 	CreatedAt   time.Time                    `json:"created_at"`
@@ -114,6 +118,7 @@ func toWorkflowResponse(wf *model.Workflow) workflowResponse {
 		Name:        wf.Name,
 		Description: wf.Description,
 		IsDefault:   wf.IsDefault,
+		Mode:        wf.Mode,
 		Statuses:    statuses,
 		CreatedAt:   wf.CreatedAt,
 		UpdatedAt:   wf.UpdatedAt,
@@ -147,6 +152,7 @@ func toWorkflowDetailResponse(wf *model.Workflow) workflowDetailResponse {
 		Name:        wf.Name,
 		Description: wf.Description,
 		IsDefault:   wf.IsDefault,
+		Mode:        wf.Mode,
 		Statuses:    statuses,
 		Transitions: transitions,
 		CreatedAt:   wf.CreatedAt,
@@ -221,6 +227,7 @@ func (h *WorkflowHandler) Create(w http.ResponseWriter, r *http.Request) {
 	wf, err := h.workflows.Create(r.Context(), service.CreateWorkflowInput{
 		Name:        req.Name,
 		Description: req.Description,
+		Mode:        req.Mode,
 		Statuses:    statuses,
 		Transitions: transitions,
 	})
@@ -276,6 +283,7 @@ func (h *WorkflowHandler) Update(w http.ResponseWriter, r *http.Request) {
 	input := service.UpdateWorkflowInput{
 		Name:        req.Name,
 		Description: req.Description,
+		Mode:        req.Mode,
 	}
 
 	if req.Statuses != nil {
@@ -516,6 +524,7 @@ func (h *WorkflowHandler) CreateProjectWorkflow(w http.ResponseWriter, r *http.R
 		ProjectID:   &project.ID,
 		Name:        req.Name,
 		Description: req.Description,
+		Mode:        req.Mode,
 		Statuses:    statuses,
 		Transitions: transitions,
 	})
@@ -571,6 +580,7 @@ func (h *WorkflowHandler) UpdateProjectWorkflow(w http.ResponseWriter, r *http.R
 	input := service.UpdateWorkflowInput{
 		Name:        req.Name,
 		Description: req.Description,
+		Mode:        req.Mode,
 	}
 
 	if req.Statuses != nil {
