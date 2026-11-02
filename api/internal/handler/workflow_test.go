@@ -54,8 +54,8 @@ func TestWorkflowHandler_List(t *testing.T) {
 
 	var workflows []json.RawMessage
 	json.Unmarshal(resp["data"], &workflows)
-	if len(workflows) != 2 {
-		t.Fatalf("expected 2 workflows, got %d", len(workflows))
+	if len(workflows) != 3 {
+		t.Fatalf("expected 3 workflows, got %d", len(workflows))
 	}
 }
 
@@ -81,6 +81,68 @@ func TestWorkflowHandler_Create(t *testing.T) {
 
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+}
+
+func TestWorkflowHandler_Create_FreeMode(t *testing.T) {
+	h, _, info := workflowTestSetup(t)
+
+	body := `{
+		"name": "Free WF",
+		"mode": "free",
+		"statuses": [
+			{"name": "open", "display_name": "Open", "category": "todo", "position": 0},
+			{"name": "done", "display_name": "Done", "category": "done", "position": 1}
+		],
+		"transitions": [
+			{"from_status": "open", "to_status": "done", "name": "Complete"}
+		]
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/workflows", bytes.NewBufferString(body))
+	req = req.WithContext(model.ContextWithAuthInfo(req.Context(), info))
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Data struct {
+			Mode        string `json:"mode"`
+			Transitions []any  `json:"transitions"`
+		} `json:"data"`
+	}
+	json.Unmarshal(w.Body.Bytes(), &resp)
+	if resp.Data.Mode != "free" {
+		t.Fatalf("expected mode 'free', got %q", resp.Data.Mode)
+	}
+	if len(resp.Data.Transitions) != 0 {
+		t.Fatalf("expected transitions dropped in free mode, got %d", len(resp.Data.Transitions))
+	}
+}
+
+func TestWorkflowHandler_Create_InvalidMode(t *testing.T) {
+	h, _, info := workflowTestSetup(t)
+
+	body := `{
+		"name": "Bad WF",
+		"mode": "bogus",
+		"statuses": [
+			{"name": "open", "display_name": "Open", "category": "todo", "position": 0}
+		]
+	}`
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/admin/workflows", bytes.NewBufferString(body))
+	req = req.WithContext(model.ContextWithAuthInfo(req.Context(), info))
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("expected 400, got %d: %s", w.Code, w.Body.String())
 	}
 }
 

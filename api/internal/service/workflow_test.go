@@ -44,6 +44,77 @@ func TestWorkflowCreate_Success(t *testing.T) {
 	}
 }
 
+func TestWorkflowCreate_FreeMode(t *testing.T) {
+	svc, _ := newTestWorkflowService()
+
+	wf, err := svc.Create(context.Background(), CreateWorkflowInput{
+		Name: "Free",
+		Mode: model.WorkflowModeFree,
+		Statuses: []model.WorkflowStatus{
+			{Name: "todo", DisplayName: "To Do", Category: model.CategoryTodo, Position: 0},
+			{Name: "done", DisplayName: "Done", Category: model.CategoryDone, Position: 1},
+		},
+		Transitions: []model.WorkflowTransition{
+			{FromStatus: "todo", ToStatus: "done"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if wf.Mode != model.WorkflowModeFree {
+		t.Fatalf("expected mode 'free', got %s", wf.Mode)
+	}
+	if len(wf.Transitions) != 0 {
+		t.Fatalf("expected transitions to be dropped in free mode, got %d", len(wf.Transitions))
+	}
+}
+
+func TestWorkflowCreate_InvalidMode(t *testing.T) {
+	svc, _ := newTestWorkflowService()
+
+	_, err := svc.Create(context.Background(), CreateWorkflowInput{
+		Name: "Bad",
+		Mode: "bogus",
+		Statuses: []model.WorkflowStatus{
+			{Name: "todo", DisplayName: "To Do", Category: model.CategoryTodo, Position: 0},
+		},
+	})
+	if err == nil {
+		t.Fatal("expected error for invalid mode")
+	}
+}
+
+func TestWorkflowUpdate_Mode(t *testing.T) {
+	svc, _ := newTestWorkflowService()
+
+	wf, err := svc.Create(context.Background(), CreateWorkflowInput{
+		Name: "Custom",
+		Statuses: []model.WorkflowStatus{
+			{Name: "todo", DisplayName: "To Do", Category: model.CategoryTodo, Position: 0},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wf.Mode != model.WorkflowModeOrdered {
+		t.Fatalf("expected default mode 'ordered', got %s", wf.Mode)
+	}
+
+	freeMode := model.WorkflowModeFree
+	updated, err := svc.Update(context.Background(), wf.ID, UpdateWorkflowInput{Mode: &freeMode})
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if updated.Mode != model.WorkflowModeFree {
+		t.Fatalf("expected mode 'free', got %s", updated.Mode)
+	}
+
+	bogus := "bogus"
+	if _, err := svc.Update(context.Background(), wf.ID, UpdateWorkflowInput{Mode: &bogus}); err == nil {
+		t.Fatal("expected error for invalid mode")
+	}
+}
+
 func TestWorkflowCreate_EmptyName(t *testing.T) {
 	svc, _ := newTestWorkflowService()
 
@@ -264,13 +335,26 @@ func TestSeedDefaultWorkflows(t *testing.T) {
 		t.Fatalf("expected no error, got %v", err)
 	}
 
-	// Should have created two workflows
+	// Should have created three workflows
 	workflows, err := svc.List(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(workflows) != 2 {
-		t.Fatalf("expected 2 seeded workflows, got %d", len(workflows))
+	if len(workflows) != 3 {
+		t.Fatalf("expected 3 seeded workflows, got %d", len(workflows))
+	}
+
+	var free *model.Workflow
+	for i := range workflows {
+		if workflows[i].Name == "Free Workflow" {
+			free = &workflows[i]
+		}
+	}
+	if free == nil {
+		t.Fatal("expected 'Free Workflow' to be seeded")
+	}
+	if free.Mode != model.WorkflowModeFree {
+		t.Fatalf("expected free workflow mode 'free', got %s", free.Mode)
 	}
 
 	// Seed again should be idempotent
@@ -283,8 +367,8 @@ func TestSeedDefaultWorkflows(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(workflows) != 2 {
-		t.Fatalf("expected still 2 workflows after re-seed, got %d", len(workflows))
+	if len(workflows) != 3 {
+		t.Fatalf("expected still 3 workflows after re-seed, got %d", len(workflows))
 	}
 }
 
@@ -399,6 +483,73 @@ func TestWorkItemUpdate_InvalidTransition(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error for invalid transition")
+	}
+	if !isErrInvalidTransition(err) {
+		t.Fatalf("expected ErrInvalidTransition, got %v", err)
+	}
+}
+
+func TestWorkItemUpdate_FreeWorkflowTransition(t *testing.T) {
+	setup := newTestWorkItemSetup()
+
+	// Free workflow: no transition rules, any status change is allowed
+	wfID := uuid.New()
+	wf := &model.Workflow{
+		ID:        wfID,
+		Name:      "Free Workflow",
+		IsDefault: true,
+		Mode:      model.WorkflowModeFree,
+		Statuses: []model.WorkflowStatus{
+			{Name: "open", DisplayName: "Open", Category: model.CategoryTodo, Position: 0},
+			{Name: "in_progress", DisplayName: "In Progress", Category: model.CategoryInProgress, Position: 1},
+			{Name: "done", DisplayName: "Done", Category: model.CategoryDone, Position: 2},
+		},
+	}
+	setup.svc.workflows.(*mockWorkflowRepo).workflows[wfID] = wf
+
+	info := userAuthInfo()
+	project := setupProjectWithMember(t, setup.projectRepo, setup.memberRepo, info, model.ProjectRoleMember)
+	project.DefaultWorkflowID = &wfID
+
+	item, err := setup.svc.Create(context.Background(), info, project.Key, CreateWorkItemInput{
+		Type:  model.WorkItemTypeTask,
+		Title: "Test Item",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// open -> done skips in_progress entirely — allowed in free mode
+	doneStatus := "done"
+	updated, err := setup.svc.Update(context.Background(), info, project.Key, item.ItemNumber, UpdateWorkItemInput{
+		Status: &doneStatus,
+	})
+	if err != nil {
+		t.Fatalf("expected free transition to succeed, got %v", err)
+	}
+	if updated.Status != "done" {
+		t.Fatalf("expected status 'done', got %s", updated.Status)
+	}
+
+	// done -> open (reopen) — also allowed
+	openStatus := "open"
+	updated, err = setup.svc.Update(context.Background(), info, project.Key, item.ItemNumber, UpdateWorkItemInput{
+		Status: &openStatus,
+	})
+	if err != nil {
+		t.Fatalf("expected free reopen to succeed, got %v", err)
+	}
+	if updated.Status != "open" {
+		t.Fatalf("expected status 'open', got %s", updated.Status)
+	}
+
+	// A status outside the workflow is still rejected
+	bogusStatus := "does_not_exist"
+	_, err = setup.svc.Update(context.Background(), info, project.Key, item.ItemNumber, UpdateWorkItemInput{
+		Status: &bogusStatus,
+	})
+	if err == nil {
+		t.Fatal("expected error for status outside the workflow")
 	}
 	if !isErrInvalidTransition(err) {
 		t.Fatalf("expected ErrInvalidTransition, got %v", err)

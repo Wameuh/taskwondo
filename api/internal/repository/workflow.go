@@ -21,6 +21,9 @@ func NewWorkflowRepository(db *sql.DB) *WorkflowRepository {
 
 // Create inserts a workflow with its statuses and transitions in a single transaction.
 func (r *WorkflowRepository) Create(ctx context.Context, wf *model.Workflow) error {
+	if wf.Mode == "" {
+		wf.Mode = model.WorkflowModeOrdered
+	}
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("beginning transaction: %w", err)
@@ -28,8 +31,8 @@ func (r *WorkflowRepository) Create(ctx context.Context, wf *model.Workflow) err
 	defer tx.Rollback()
 
 	_, err = tx.ExecContext(ctx,
-		`INSERT INTO workflows (id, project_id, name, description, is_default) VALUES ($1, $2, $3, $4, $5)`,
-		wf.ID, wf.ProjectID, wf.Name, wf.Description, wf.IsDefault)
+		`INSERT INTO workflows (id, project_id, name, description, is_default, mode) VALUES ($1, $2, $3, $4, $5, $6)`,
+		wf.ID, wf.ProjectID, wf.Name, wf.Description, wf.IsDefault, wf.Mode)
 	if err != nil {
 		return fmt.Errorf("inserting workflow: %w", err)
 	}
@@ -73,7 +76,7 @@ func scanWorkflow(row interface{ Scan(dest ...interface{}) error }) (*model.Work
 	var description sql.NullString
 	var projectID sql.NullString
 
-	err := row.Scan(&wf.ID, &projectID, &wf.Name, &description, &wf.IsDefault, &wf.CreatedAt, &wf.UpdatedAt)
+	err := row.Scan(&wf.ID, &projectID, &wf.Name, &description, &wf.IsDefault, &wf.Mode, &wf.CreatedAt, &wf.UpdatedAt)
 	if err != nil {
 		return nil, err
 	}
@@ -92,7 +95,7 @@ func scanWorkflow(row interface{ Scan(dest ...interface{}) error }) (*model.Work
 // GetByID returns a workflow by ID, including statuses and transitions.
 func (r *WorkflowRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.Workflow, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, project_id, name, description, is_default, created_at, updated_at
+		`SELECT id, project_id, name, description, is_default, mode, created_at, updated_at
 		 FROM workflows WHERE id = $1`, id)
 
 	wf, err := scanWorkflow(row)
@@ -121,7 +124,7 @@ func (r *WorkflowRepository) GetByID(ctx context.Context, id uuid.UUID) (*model.
 // List returns all system-wide workflows (project_id IS NULL).
 func (r *WorkflowRepository) List(ctx context.Context) ([]model.Workflow, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, project_id, name, description, is_default, created_at, updated_at
+		`SELECT id, project_id, name, description, is_default, mode, created_at, updated_at
 		 FROM workflows WHERE project_id IS NULL ORDER BY is_default DESC, name`)
 	if err != nil {
 		return nil, fmt.Errorf("querying workflows: %w", err)
@@ -134,7 +137,7 @@ func (r *WorkflowRepository) List(ctx context.Context) ([]model.Workflow, error)
 // ListByProject returns workflows available to a project (system-wide + project-specific).
 func (r *WorkflowRepository) ListByProject(ctx context.Context, projectID uuid.UUID) ([]model.Workflow, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, project_id, name, description, is_default, created_at, updated_at
+		`SELECT id, project_id, name, description, is_default, mode, created_at, updated_at
 		 FROM workflows WHERE project_id IS NULL OR project_id = $1
 		 ORDER BY is_default DESC, project_id NULLS FIRST, name`, projectID)
 	if err != nil {
@@ -148,7 +151,7 @@ func (r *WorkflowRepository) ListByProject(ctx context.Context, projectID uuid.U
 // ListProjectOnly returns only project-scoped workflows (not system-wide).
 func (r *WorkflowRepository) ListProjectOnly(ctx context.Context, projectID uuid.UUID) ([]model.Workflow, error) {
 	rows, err := r.db.QueryContext(ctx,
-		`SELECT id, project_id, name, description, is_default, created_at, updated_at
+		`SELECT id, project_id, name, description, is_default, mode, created_at, updated_at
 		 FROM workflows WHERE project_id = $1 ORDER BY name`, projectID)
 	if err != nil {
 		return nil, fmt.Errorf("querying project-only workflows: %w", err)
@@ -173,9 +176,9 @@ func (r *WorkflowRepository) scanWorkflowRows(rows *sql.Rows) ([]model.Workflow,
 // Update modifies a workflow's name and description.
 func (r *WorkflowRepository) Update(ctx context.Context, wf *model.Workflow) error {
 	result, err := r.db.ExecContext(ctx,
-		`UPDATE workflows SET name = $1, description = $2, updated_at = now()
-		 WHERE id = $3`,
-		wf.Name, wf.Description, wf.ID)
+		`UPDATE workflows SET name = $1, description = $2, mode = $3, updated_at = now()
+		 WHERE id = $4`,
+		wf.Name, wf.Description, wf.Mode, wf.ID)
 	if err != nil {
 		return fmt.Errorf("updating workflow: %w", err)
 	}
@@ -197,10 +200,10 @@ func (r *WorkflowRepository) ReplaceStatusesAndTransitions(ctx context.Context, 
 	}
 	defer tx.Rollback()
 
-	// Update name/description
+	// Update name/description/mode
 	_, err = tx.ExecContext(ctx,
-		`UPDATE workflows SET name = $1, description = $2, updated_at = now() WHERE id = $3`,
-		wf.Name, wf.Description, wf.ID)
+		`UPDATE workflows SET name = $1, description = $2, mode = $3, updated_at = now() WHERE id = $4`,
+		wf.Name, wf.Description, wf.Mode, wf.ID)
 	if err != nil {
 		return fmt.Errorf("updating workflow: %w", err)
 	}
@@ -282,7 +285,7 @@ func (r *WorkflowRepository) IsInUse(ctx context.Context, id uuid.UUID) (bool, e
 // GetDefaultByName returns a default workflow by name, or ErrNotFound.
 func (r *WorkflowRepository) GetDefaultByName(ctx context.Context, name string) (*model.Workflow, error) {
 	row := r.db.QueryRowContext(ctx,
-		`SELECT id, project_id, name, description, is_default, created_at, updated_at
+		`SELECT id, project_id, name, description, is_default, mode, created_at, updated_at
 		 FROM workflows WHERE name = $1 AND is_default = true`, name)
 
 	wf, err := scanWorkflow(row)
@@ -322,6 +325,10 @@ func (r *WorkflowRepository) ValidateTransition(ctx context.Context, workflowID 
 		`SELECT EXISTS(
 			SELECT 1 FROM workflow_transitions
 			WHERE workflow_id = $1 AND from_status = $2 AND to_status = $3
+		) OR EXISTS(
+			SELECT 1 FROM workflows w
+			JOIN workflow_statuses ws ON ws.workflow_id = w.id AND ws.name = $3
+			WHERE w.id = $1 AND w.mode = 'free'
 		)`, workflowID, fromStatus, toStatus).Scan(&exists)
 	if err != nil {
 		return false, fmt.Errorf("validating transition: %w", err)
